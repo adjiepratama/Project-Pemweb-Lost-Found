@@ -17,7 +17,6 @@ class Item extends Model
         'category',
         'location',
         'date_event',
-        'type',
         'status',
         'image'
     ];

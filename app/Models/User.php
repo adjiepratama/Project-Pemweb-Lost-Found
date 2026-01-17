@@ -19,6 +19,7 @@ class User extends Authenticatable
      */
     protected $fillable = [
         'name',
+        'no_unik', // <--- JANGAN LUPA INI! (Wajib ada agar bisa diregister)
         'username',
         'email',
         'password',

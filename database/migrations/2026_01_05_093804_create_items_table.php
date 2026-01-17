@@ -10,21 +10,33 @@ return new class extends Migration
      * Run the migrations.
      */
     public function up(): void
-{
-    Schema::create('items', function (Blueprint $table) {
-        $table->id();
-        $table->foreignId('user_id')->constrained()->onDelete('cascade'); // Relasi ke User
-        $table->string('title');        // Nama Barang (Misal: Dompet Hilang)
-        $table->text('description');    // Ciri-ciri
-        $table->string('category');     // Elektronik, Aksesoris, dll
-        $table->string('location');     // Lokasi kejadian
-        $table->date('date_event');     // Tanggal kejadian
-        $table->enum('type', ['lost', 'found']); // Tipe: Kehilangan atau Penemuan
-        $table->enum('status', ['active', 'resolved'])->default('active'); // Status laporan
-        $table->string('image')->nullable(); // Foto barang
-        $table->timestamps();
-    });
-}
+    {
+        Schema::create('items', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('user_id')->constrained()->onDelete('cascade');
+            $table->string('title');
+            $table->text('description');
+            $table->string('category');
+            $table->string('location');
+            $table->date('date_event');
+            
+            // --- BAGIAN ENUM YANG SUDAH DIPERBAIKI ---
+            // Kita tambahkan 'pending' dan 'rejected' agar Admin Controller tidak error.
+            // Default diubah ke 'pending' agar saat user lapor, statusnya menunggu admin dulu.
+            $table->enum('status', [
+                'pending',    // Menunggu Konfirmasi Admin
+                'available',  // Disetujui Admin (Tayang)
+                'rejected',   // Ditolak Admin
+                'returned',   // Sudah dikembalikan
+                'donated'     // Didonasikan
+            ])->default('pending'); 
+            // -----------------------------------------
+
+            $table->string('image')->nullable();
+            $table->timestamps();
+        });
+    }
+
     /**
      * Reverse the migrations.
      */
