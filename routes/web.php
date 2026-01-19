@@ -4,12 +4,20 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\UserDashboardController;
 use App\Http\Controllers\ClaimController;
- use App\Http\Controllers\UserProfileController;
- use App\Http\Controllers\AdminController;
+use App\Http\Controllers\UserProfileController;
+use App\Http\Controllers\AdminController;
 
-// ==========================================
-// ROUTE TAMU (GUEST) - Login/Register
-// ==========================================
+// 1. HALAMAN UTAMA (Supaya localhost:8000 tidak 404)
+// ... imports ...
+
+// 1. HALAMAN DEPAN (ROOT)
+// Kembalikan ke logika awal: Selalu arahkan ke Login
+Route::get('/', function () {
+    return redirect()->route('login');
+});
+// ... sisa route lainnya tetap sama ...
+
+// 2. ROUTE TAMU (Login/Register)
 Route::middleware('guest')->group(function () {
     Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
     Route::post('/login', [AuthController::class, 'login'])->name('login.post');
@@ -17,83 +25,62 @@ Route::middleware('guest')->group(function () {
     Route::post('/register', [AuthController::class, 'register'])->name('register.post');
 });
 
-// ==========================================
-// ROUTE ADMIN
-// ==========================================
-Route::middleware(['auth', 'role:admin'])->prefix('admin')->group(function () {
+// 3. ROUTE ADMIN (Grouped & Named)
+Route::middleware(['auth', 'role:admin'])->prefix('admin')->name('admin.')->group(function () {
     
-    // Dashboard Admin
-    Route::get('/dashboard', [AdminController::class, 'index'])->name('admin.dashboard');
+    // Menu Utama
+    Route::get('/dashboard', [AdminController::class, 'index'])->name('dashboard');
+    Route::get('/kelola-barang', [AdminController::class, 'kelolaBarang'])->name('kelola.barang');
+    Route::get('/laporan-temuan', [AdminController::class, 'laporanTemuan'])->name('laporan.temuan');
+    Route::get('/verifikasi-klaim', [AdminController::class, 'verifikasiKlaim'])->name('verifikasi.klaim');
 
-    // Aksi Update Status
-    Route::put('/item/{id}/update', [AdminController::class, 'updateItemStatus'])->name('admin.item.update');
-    Route::put('/claim/{id}/update', [AdminController::class, 'updateClaimStatus'])->name('admin.claim.update');
+    // CRUD Barang
+    Route::post('/barang/store', [AdminController::class, 'storeBarang'])->name('barang.store');
+    Route::put('/barang/{id}', [AdminController::class, 'updateBarang'])->name('barang.update');
+    Route::delete('/barang/{id}', [AdminController::class, 'destroyBarang'])->name('barang.destroy');
 
+    // Action Khusus (Review & Verifikasi)
+    Route::put('/item-status/{id}', [AdminController::class, 'updateItemStatus'])->name('item.update');
+    Route::put('/klaim/{id}', [AdminController::class, 'updateClaimStatus'])->name('claim.update');
+
+    // Profile Routes
+    Route::get('/profile', [AdminController::class, 'profile'])->name('profile');
+    Route::put('/profile', [AdminController::class, 'updateProfile'])->name('profile.update');
+    Route::put('/password', [AdminController::class, 'updatePassword'])->name('password.update');
 });
 
-// ==========================================
-// ROUTE USER (Mahasiswa)
-// ==========================================
+// 4. ROUTE USER (Mahasiswa)
 Route::middleware(['auth', 'role:user'])->group(function () {
     
-    // 1. Dashboard Utama
+    // Dashboard & Search
     Route::get('/user/dashboard', [UserDashboardController::class, 'index'])->name('user.dashboard');
-
-    // 2. Proses Klaim Barang (Pop-up)
-    Route::post('/claim/store', [ClaimController::class, 'store'])->name('claim.store');
-
-    // 3. Search Gambar (Logic Upload)
     Route::post('/user/dashboard/image-search', [UserDashboardController::class, 'searchImage'])->name('user.image.search');
+    Route::get('/user/dashboard/image-search', function() { return redirect()->route('user.dashboard'); });
 
-    // 4. Search Gambar (Safety Redirect - Biar ga error kalau di-refresh)
-    Route::get('/user/dashboard/image-search', function() {
-        return redirect()->route('user.dashboard');
-    });
+    // Klaim Barang
+    Route::post('/claim/store', [ClaimController::class, 'store'])->name('claim.store');
+    Route::delete('/user/claim/{id}', [UserDashboardController::class, 'destroyClaim'])->name('user.claim.destroy');
 
-    // ==========================================
-    // FITUR LAPOR BARANG
-    // ==========================================
-    
-    // Menampilkan Halaman Form Lapor
+    // Lapor Barang
     Route::get('/user/lapor-barang', [UserDashboardController::class, 'showLapor'])->name('user.lapor');
-
-    // Memproses Data Laporan ke Database
     Route::post('/user/lapor-barang', [UserDashboardController::class, 'storeLapor'])->name('user.lapor.store');
-
-    // ==========================================
-    // FITUR RIWAYAT (YANG BIKIN ERROR TADI)
-    // ==========================================
-   // ... route history yang sudah ada ...
-    Route::get('/user/riwayat', [UserDashboardController::class, 'history'])->name('user.history');
-
-    // --- TAMBAHAN BARU (CRUD) ---
     Route::put('/user/lapor/{id}', [UserDashboardController::class, 'update'])->name('user.lapor.update');
     Route::delete('/user/lapor/{id}', [UserDashboardController::class, 'destroy'])->name('user.lapor.destroy');
 
-    // TAMBAHKAN INI: Route untuk Batalkan Klaim
-    Route::delete('/user/claim/{id}', [UserDashboardController::class, 'destroyClaim'])->name('user.claim.destroy');
+    // Riwayat & Profile
+    Route::get('/user/riwayat', [UserDashboardController::class, 'history'])->name('user.history');
+    Route::get('/user/profile', [UserProfileController::class, 'index'])->name('user.profile');
+    Route::put('/user/profile', [UserProfileController::class, 'updateProfile'])->name('user.profile.update'); 
+    Route::put('/user/password', [UserProfileController::class, 'updatePassword'])->name('user.password.update');
 
-
-    // --- ROUTE PROFILE ---
-// Route Profile
-Route::get('/user/profile', [UserProfileController::class, 'index'])->name('user.profile');
-// PENTING: Route ini harus ada lagi untuk proses upload foto
-Route::put('/user/profile', [UserProfileController::class, 'updateProfile'])->name('user.profile.update'); 
-// Route Ganti Password
-Route::put('/user/password', [UserProfileController::class, 'updatePassword'])->name('user.password.update');
-
-// --- ROUTE NOTIFICATION ---
-Route::get('/mark-as-read', function () {
-        auth()->user()->unreadNotifications->markAsRead();
+    // Notifikasi
+    Route::get('/mark-as-read', function () {
+        if(auth()->check()) {
+            auth()->user()->unreadNotifications->markAsRead();
+        }
         return redirect()->back();
     })->name('markAsRead');
-
 });
 
-
-
-
-// ==========================================
-// LOGOUT
-// ==========================================
+// 5. LOGOUT
 Route::get('/logout', [AuthController::class, 'logout'])->middleware('auth')->name('logout');

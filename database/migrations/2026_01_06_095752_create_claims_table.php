@@ -25,7 +25,8 @@ return new class extends Migration
         
         // Status Klaim: pending (menunggu), verified (disetujui admin), rejected (ditolak)
         $table->enum('status', ['pending', 'verified', 'rejected'])->default('pending');
-        
+        $table->text('admin_note')->nullable();
+
         $table->timestamps();
     });
 }
