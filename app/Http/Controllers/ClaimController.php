@@ -19,8 +19,18 @@ class ClaimController extends Controller
             'claimer_email'     => 'required|email',
             'claimer_phone' => 'required',
             'claim_description' => 'required',
-            'claim_proof' => '|image|mimes:jpeg,png,jpg|max:2048', // Max 2MB
+            'claim_proof' => 'nullable|image|mimes:jpeg,png,jpg|max:2048', // Tambahkan nullable agar tidak error jika kosong
         ]);
+
+        // --- TAMBAHAN: CEK STATUS BARANG ---
+        // Ambil data barang berdasarkan ID
+        $item = Item::findOrFail($request->item_id);
+
+        // Jika statusnya 'donated', tolak klaim dan kembali
+        if ($item->status == 'donated') {
+            return redirect()->back()->withErrors(['error' => 'Maaf, barang ini sudah didonasikan dan tidak dapat diklaim lagi.']);
+        }
+        // -----------------------------------
 
         // 2. Proses Upload Gambar Bukti
         $proofPath = null;

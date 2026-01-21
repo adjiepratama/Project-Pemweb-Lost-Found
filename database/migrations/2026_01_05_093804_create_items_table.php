@@ -11,30 +11,28 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('items', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('user_id')->constrained()->onDelete('cascade');
-            $table->string('title');
-            $table->text('description');
-            $table->string('category');
-            $table->string('location');
-            $table->date('date_event');
-            
-            // --- BAGIAN ENUM YANG SUDAH DIPERBAIKI ---
-            // Kita tambahkan 'pending' dan 'rejected' agar Admin Controller tidak error.
-            // Default diubah ke 'pending' agar saat user lapor, statusnya menunggu admin dulu.
-            $table->enum('status', [
-                'pending',    // Menunggu Konfirmasi Admin
-                'available',  // Disetujui Admin (Tayang)
-                'rejected',   // Ditolak Admin
-                'returned',   // Sudah dikembalikan
-                'donated'     // Didonasikan
-            ])->default('pending'); 
-            // -----------------------------------------
+    Schema::create('items', function (Blueprint $table) {
+        $table->id();
+        $table->foreignId('user_id')->constrained()->onDelete('cascade');
+        $table->string('title');
+        $table->text('description');
+        $table->string('category');
+        $table->string('location');
+        $table->date('date_event');
+        
+        $table->enum('status', [
+            'pending', 'available', 'rejected', 'returned', 'donated'
+        ])->default('pending'); 
 
-            $table->string('image')->nullable();
-            $table->timestamps();
-        });
+        $table->string('image')->nullable();
+        
+        // --- TAMBAHKAN BARIS INI ---
+        // Kolom ini akan menyimpan kode biner gambar (contoh: 101011001...)
+        $table->string('image_hash')->nullable(); 
+        // ---------------------------
+
+        $table->timestamps();
+    });
     }
 
     /**

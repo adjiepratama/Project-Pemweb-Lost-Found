@@ -45,13 +45,14 @@ class StatusNotification extends Notification
      *
      * @return array<string, mixed>
      */
-    public function toArray(object $notifiable): array
-    {
-        return [
-            'title'   => $this->title,
-            'message' => $this->message,
-            'type'    => $this->type,
-            'link'    => $this->link,
-        ];
-    }
+   public function toArray($notifiable)
+{
+    return [
+        
+        'type' => $this->type,       // success / danger
+        'title' => $this->title,     // Judul notif
+        'message' => $this->message, // Isi pesan
+        'link' => $this->link,       // Link redirect
+    ];
+}
 }

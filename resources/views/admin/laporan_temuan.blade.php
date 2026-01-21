@@ -15,11 +15,13 @@
 <body class="bg-gray-50 text-gray-800" x-data="{ 
     reviewModalOpen: false,
     selectedItem: null,
+    selectedImage: '', // Variable baru untuk menyimpan URL gambar valid
     actionUrl: '',
 
-    openReview(item) {
+    // Terima parameter imageUrl dari PHP
+    openReview(item, imageUrl) {
         this.selectedItem = item;
-        // URL untuk update status item
+        this.selectedImage = imageUrl; // Simpan URL gambar
         this.actionUrl = '{{ url('admin/item-status') }}/' + item.id; 
         this.reviewModalOpen = true;
     }
@@ -39,9 +41,8 @@
                 <nav class="mt-6 px-4 space-y-1">
                     <p class="px-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Menu Utama</p>
                     
-                    <a href="{{ route('admin.dashboard') }}" 
-                    class="flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-colors {{ request()->routeIs('admin.dashboard') ? 'bg-cyan-50 text-cyan-600' : 'text-gray-600 hover:bg-cyan-50 hover:text-cyan-600' }}">
-                        <svg class="w-5 h-5 {{ request()->routeIs('admin.dashboard') ? 'text-cyan-600' : 'text-gray-400' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6z"/></svg>
+                     <a href="{{ route('admin.dashboard') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-colors text-gray-600 hover:bg-cyan-50 hover:text-cyan-600">
+                       <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
                         Dashboard
                     </a>
 
@@ -86,7 +87,9 @@
                     </div>
                     <div class="h-8 w-8 rounded-full bg-cyan-100 flex items-center justify-center text-cyan-600 font-bold border border-cyan-200 shadow-sm overflow-hidden group-hover:border-cyan-400 transition-colors">
                         @if(Auth::user()->profile_photo)
-                            <img src="{{ asset('storage/' . Auth::user()->profile_photo) }}" class="w-full h-full object-cover">
+                            {{-- LOGIKA GAMBAR PROFIL --}}
+                            <img src="{{ \Illuminate\Support\Str::startsWith(Auth::user()->profile_photo, 'http') ? Auth::user()->profile_photo : asset('storage/' . Auth::user()->profile_photo) }}" 
+                                 class="w-full h-full object-cover">
                         @else
                             {{ substr(Auth::user()->name, 0, 1) }}
                         @endif
@@ -202,7 +205,22 @@
                                 <td class="px-6 py-4">
                                     <div class="flex items-center gap-3">
                                         <div class="w-10 h-10 rounded-lg bg-gray-100 border border-gray-200 overflow-hidden flex-shrink-0">
-                                            <img src="{{ $item->image ? asset('storage/'.$item->image) : 'https://via.placeholder.com/150?text=No+Img' }}" class="w-full h-full object-cover">
+                                            {{-- LOGIKA GAMBAR PINTAR (Di List) --}}
+                                            @php
+                                                $imagePath = $item->image;
+                                                $imageUrl = 'https://via.placeholder.com/150?text=No+Img';
+                                                
+                                                if ($imagePath) {
+                                                    if (\Illuminate\Support\Str::startsWith($imagePath, 'http')) {
+                                                        $imageUrl = $imagePath;
+                                                    } elseif (file_exists(public_path('storage/' . $imagePath))) {
+                                                        $imageUrl = asset('storage/' . $imagePath);
+                                                    } else {
+                                                        $imageUrl = asset($imagePath);
+                                                    }
+                                                }
+                                            @endphp
+                                            <img src="{{ $imageUrl }}" class="w-full h-full object-cover">
                                         </div>
                                         <div>
                                             <p class="font-bold text-gray-800">{{ $item->title }}</p>
@@ -253,14 +271,15 @@
                                     </button>
                                     
                                     <div x-show="open" class="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl border border-gray-100 z-50 text-left py-1" x-cloak>
+                                        {{-- KIRIM $imageUrl YANG SUDAH JADI KE FUNGSI ALPINE --}}
                                         @if($item->status == 'pending')
-                                            <button @click="open = false; openReview({{ $item }})" class="w-full text-left px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 flex items-center gap-2 font-medium">
+                                            <button @click="open = false; openReview({{ $item }}, '{{ $imageUrl }}')" class="w-full text-left px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 flex items-center gap-2 font-medium">
                                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                                                 Review Laporan
                                             </button>
                                         @endif
 
-                                        <button @click="open = false; openReview({{ $item }})" class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                                        <button @click="open = false; openReview({{ $item }}, '{{ $imageUrl }}')" class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
                                             <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
                                             Lihat Detail
                                         </button>
@@ -287,7 +306,8 @@
             <div class="bg-white rounded-xl shadow-xl w-full max-w-2xl z-50 overflow-hidden transform transition-all">
                 <div class="flex flex-col md:flex-row">
                     <div class="w-full md:w-1/2 bg-gray-200 h-64 md:h-auto relative">
-                        <img :src="selectedItem?.image ? '/storage/' + selectedItem.image : 'https://via.placeholder.com/400?text=No+Img'" class="w-full h-full object-cover">
+                        <img :src="selectedImage || 'https://via.placeholder.com/400?text=No+Img'" 
+                             class="w-full h-full object-cover">
                         <div class="absolute top-2 left-2">
                              <span class="bg-white/90 backdrop-blur text-gray-800 px-2 py-1 rounded text-xs font-bold" x-text="selectedItem?.category"></span>
                         </div>

@@ -137,7 +137,7 @@
                                                 <input type="text" value="{{ Auth::user()->email }}" readonly class="w-full bg-gray-100 text-gray-500 border border-gray-200 rounded-lg px-3 py-2 cursor-not-allowed focus:outline-none">
                                             </div>
                                             <div>
-                                                <label class="block text-sm font-medium text-gray-700 mb-1">No Unik (NIM)</label>
+                                                <label class="block text-sm font-medium text-gray-700 mb-1">No Induk</label>
                                                 <input type="text" value="{{ Auth::user()->no_unik }}" readonly class="w-full bg-gray-100 text-gray-500 border border-gray-200 rounded-lg px-3 py-2 cursor-not-allowed focus:outline-none">
                                             </div>
                                         </div>

@@ -40,7 +40,7 @@
                 </div>
 
                 <div>
-                    <label for="no_unik" class="block text-sm font-medium text-gray-700">Nomer Unik (NIM/ID)</label>
+                    <label for="no_unik" class="block text-sm font-medium text-gray-700">Nomer Induk</label>
                     <div class="mt-1">
                         <input id="no_unik" name="no_unik" type="text" required value="{{ old('no_unik') }}" 
                                class="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-cyan-500 focus:border-cyan-500 sm:text-sm">

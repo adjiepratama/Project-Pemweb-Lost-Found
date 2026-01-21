@@ -16,7 +16,7 @@ class ItemSeeder extends Seeder
             [
                 'title' => 'Dompet Kulit Cokelat',
                 'category' => 'Aksesoris',
-                'location' => 'Gedung A',
+                'location' => 'Gedung Griya',
                 'status' => 'returned',
                 'date_event' => '2025-10-26',
               
@@ -25,7 +25,7 @@ class ItemSeeder extends Seeder
             [
                 'title' => 'Kacamata Hitam Rayban',
                 'category' => 'Aksesoris',
-                'location' => 'Gor ABC',
+                'location' => 'Gedung Gor ABC',
                 'status' => 'donated',
                 'date_event' => '2025-10-25',
                 
@@ -34,26 +34,17 @@ class ItemSeeder extends Seeder
             [
                 'title' => 'iPhone 13 Pro',
                 'category' => 'Elektronik',
-                'location' => 'Gedung A',
+                'location' => 'Kantin Atas',
                 'status' => 'available',
                 'date_event' => '2025-10-28',
                 
                 'image' => 'https://images.unsplash.com/photo-1632661674596-df8be070a5c5?auto=format&fit=crop&q=80&w=400',
             ],
         
-           [
-                'title' => 'Kunci',
-                'category' => 'Kunci',
-                'location' => 'Kantin bawah',
-                'status' => 'available',
-                'date_event' => '2025-10-29',
-                
-                'image' => 'https://images.unsplash.com/photo-1582137211742-5d46e9629636?auto=format&fit=crop&q=80&w=400',
-            ],
             [
                 'title' => 'Tumbler Corkcicle',
                 'category' => 'Perabotan',
-                'location' => 'Gedung C',
+                'location' => 'Mushala',
                 'status' => 'available',
                 'date_event' => '2025-10-27',
             
@@ -62,7 +53,7 @@ class ItemSeeder extends Seeder
             [
                 'title' => 'Jaket bomber coklat',
                 'category' => 'Pakaian',
-                'location' => 'Gedung B',
+                'location' => 'Gedung Griya',
                 'status' => 'available',
                 'date_event' => '2025-10-30',
                 

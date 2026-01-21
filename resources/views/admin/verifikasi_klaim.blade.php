@@ -10,36 +10,45 @@
     <style>
         body { font-family: 'Inter', sans-serif; }
         [x-cloak] { display: none !important; }
+        /* Custom scrollbar for better look in modals */
+        .scrollbar-hide::-webkit-scrollbar {
+            display: none;
+        }
     </style>
 </head>
 <body class="bg-gray-50 text-gray-800" x-data="{ 
-    // State Modal
     verifyModalOpen: false,
     rejectModalOpen: false,
     detailModalOpen: false,
-    
-    // Data Seleksi
     selectedClaim: null,
+    selectedImage: '', // URL Gambar Barang
+    selectedProof: '', // URL Bukti Klaim
     actionUrl: '',
     adminNote: '',
 
-    // Helper untuk membuka modal
-    openVerify(claim) {
+    // Terima imageUrl dari PHP
+    openVerify(claim, imageUrl) {
         this.selectedClaim = claim;
+        this.selectedImage = imageUrl;
         this.actionUrl = '{{ url('admin/klaim') }}/' + claim.id;
         this.adminNote = '';
         this.verifyModalOpen = true;
     },
 
-    openReject(claim) {
+    // Terima imageUrl dari PHP
+    openReject(claim, imageUrl) {
         this.selectedClaim = claim;
+        this.selectedImage = imageUrl;
         this.actionUrl = '{{ url('admin/klaim') }}/' + claim.id;
         this.adminNote = '';
         this.rejectModalOpen = true;
     },
 
-    openDetail(claim) {
+    // Terima imageUrl dan proofUrl dari PHP
+    openDetail(claim, imageUrl, proofUrl) {
         this.selectedClaim = claim;
+        this.selectedImage = imageUrl;
+        this.selectedProof = proofUrl;
         this.detailModalOpen = true;
     }
 }">
@@ -58,7 +67,7 @@
                     <p class="px-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Menu Utama</p>
                     
                     <a href="{{ route('admin.dashboard') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-colors text-gray-600 hover:bg-cyan-50 hover:text-cyan-600">
-                        <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6z"/></svg>
+                       <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
                         Dashboard
                     </a>
                     <a href="{{ route('admin.kelola.barang') }}" class="flex items-center gap-3 px-3 py-2.5 text-gray-600 hover:bg-cyan-50 hover:text-cyan-600 rounded-lg font-medium transition-colors">
@@ -97,7 +106,8 @@
                     </div>
                     <div class="h-8 w-8 rounded-full bg-cyan-100 flex items-center justify-center text-cyan-600 font-bold border border-cyan-200 shadow-sm overflow-hidden group-hover:border-cyan-400 transition-colors">
                         @if(Auth::user()->profile_photo)
-                            <img src="{{ asset('storage/' . Auth::user()->profile_photo) }}" class="w-full h-full object-cover">
+                            <img src="{{ \Illuminate\Support\Str::startsWith(Auth::user()->profile_photo, 'http') ? Auth::user()->profile_photo : asset('storage/' . Auth::user()->profile_photo) }}" 
+                                 class="w-full h-full object-cover rounded-full">
                         @else
                             {{ substr(Auth::user()->name, 0, 1) }}
                         @endif
@@ -157,8 +167,32 @@
                     @forelse($claims as $claim)
                     <div class="bg-white border border-gray-200 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow flex flex-col md:flex-row items-start gap-6">
                         
-                        <div class="w-16 h-16 bg-gray-100 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden border border-gray-200">
-                            <img src="{{ $claim->item->image ? asset('storage/'.$claim->item->image) : 'https://via.placeholder.com/150?text=No+Img' }}" class="w-full h-full object-cover">
+                        <div class="w-16 h-16 bg-gray-100 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden border border-gray-200 relative">
+                             @php
+                                $imagePath = $claim->item->image;
+                                $imageUrl = 'https://via.placeholder.com/150?text=No+Img';
+
+                                if ($imagePath) {
+                                    if (\Illuminate\Support\Str::startsWith($imagePath, 'http')) {
+                                        $imageUrl = $imagePath;
+                                    } elseif (file_exists(public_path('storage/' . $imagePath))) {
+                                        $imageUrl = asset('storage/' . $imagePath);
+                                    } else {
+                                        $imageUrl = asset($imagePath);
+                                    }
+                                }
+
+                                $proofPath = $claim->claim_proof;
+                                $proofUrl = null;
+                                if($proofPath) {
+                                    if(file_exists(public_path('storage/' . $proofPath))) {
+                                        $proofUrl = asset('storage/' . $proofPath);
+                                    } else {
+                                        $proofUrl = asset($proofPath);
+                                    }
+                                }
+                            @endphp
+                            <img src="{{ $imageUrl }}" class="w-full h-full object-cover">
                         </div>
 
                         <div class="flex-1 min-w-0">
@@ -203,16 +237,16 @@
                         </div>
 
                         <div class="flex flex-col gap-2 min-w-[120px]">
-                            <button @click="openDetail({{ $claim }})" class="w-full py-2 bg-white border border-gray-300 text-gray-700 text-xs font-bold rounded-lg hover:bg-gray-50 flex items-center justify-center gap-2">
+                            <button @click="openDetail({{ $claim }}, '{{ $imageUrl }}', '{{ $proofUrl }}')" class="w-full py-2 bg-white border border-gray-300 text-gray-700 text-xs font-bold rounded-lg hover:bg-gray-50 flex items-center justify-center gap-2">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
                                 Detail
                             </button>
 
                             @if($claim->status == 'pending')
-                                <button @click="openVerify({{ $claim }})" class="w-full py-2 bg-blue-700 text-white text-xs font-bold rounded-lg hover:bg-blue-800 flex items-center justify-center gap-2 shadow-sm">
+                                <button @click="openVerify({{ $claim }}, '{{ $imageUrl }}')" class="w-full py-2 bg-blue-700 text-white text-xs font-bold rounded-lg hover:bg-blue-800 flex items-center justify-center gap-2 shadow-sm">
                                     Verifikasi
                                 </button>
-                                <button @click="openReject({{ $claim }})" class="w-full py-2 bg-red-50 text-red-600 border border-red-200 text-xs font-bold rounded-lg hover:bg-red-100 flex items-center justify-center gap-2">
+                                <button @click="openReject({{ $claim }}, '{{ $imageUrl }}')" class="w-full py-2 bg-red-50 text-red-600 border border-red-200 text-xs font-bold rounded-lg hover:bg-red-100 flex items-center justify-center gap-2">
                                     Tolak
                                 </button>
                             @endif
@@ -246,7 +280,7 @@
 
                     <div class="bg-gray-50 p-3 rounded-xl border border-gray-100 flex items-center gap-3 mb-4">
                         <div class="w-10 h-10 bg-white rounded-lg flex items-center justify-center border border-gray-200 overflow-hidden">
-                             <img :src="selectedClaim?.item?.image ? '/storage/' + selectedClaim.item.image : 'https://via.placeholder.com/150'" class="w-full h-full object-cover">
+                             <img :src="selectedImage || 'https://via.placeholder.com/150'" class="w-full h-full object-cover">
                         </div>
                         <div>
                             <p class="font-bold text-sm text-gray-800" x-text="selectedClaim?.item?.title"></p>
@@ -298,7 +332,7 @@
 
                     <div class="bg-gray-50 p-3 rounded-xl border border-gray-100 flex items-center gap-3 mb-4">
                         <div class="w-10 h-10 bg-white rounded-lg flex items-center justify-center border border-gray-200 overflow-hidden">
-                             <img :src="selectedClaim?.item?.image ? '/storage/' + selectedClaim.item.image : 'https://via.placeholder.com/150'" class="w-full h-full object-cover">
+                             <img :src="selectedImage || 'https://via.placeholder.com/150'" class="w-full h-full object-cover">
                         </div>
                         <div>
                             <p class="font-bold text-sm text-gray-800" x-text="selectedClaim?.item?.title"></p>
@@ -330,53 +364,101 @@
     <div x-show="detailModalOpen" class="fixed inset-0 z-50 overflow-y-auto" x-cloak>
         <div class="fixed inset-0 bg-gray-900 bg-opacity-60 transition-opacity" @click="detailModalOpen = false"></div>
         <div class="flex items-center justify-center min-h-screen p-4">
-            <div class="bg-white rounded-2xl shadow-xl w-full max-w-2xl z-50 overflow-hidden">
-                <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
-                    <h3 class="text-lg font-bold text-gray-800">Detail Klaim & Bukti</h3>
-                    <button @click="detailModalOpen = false" class="text-gray-400 hover:text-gray-600">&times;</button>
+            <div class="bg-white rounded-2xl shadow-xl w-full max-w-4xl z-50 overflow-hidden"> <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                    <h3 class="text-lg font-bold text-gray-800">Detail Lengkap Klaim</h3>
+                    <button @click="detailModalOpen = false" class="text-gray-400 hover:text-gray-600 transition-colors">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    </button>
                 </div>
                 
                 <div class="p-6">
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div>
-                            <h4 class="font-bold text-gray-900 mb-2">Barang yang Diklaim</h4>
-                            <div class="aspect-video bg-gray-100 rounded-lg overflow-hidden mb-3">
-                                <img :src="selectedClaim?.item?.image ? '/storage/' + selectedClaim.item.image : 'https://via.placeholder.com/400?text=No+Img'" class="w-full h-full object-cover">
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                        
+                        <div class="space-y-4">
+                            <div class="flex items-center gap-2 mb-2">
+                                <span class="px-2 py-1 bg-blue-100 text-blue-700 text-xs font-bold rounded uppercase tracking-wide">Barang Ditemukan</span>
                             </div>
-                            <p class="font-bold text-gray-800" x-text="selectedClaim?.item?.title"></p>
-                            <p class="text-sm text-gray-600" x-text="selectedClaim?.item?.description"></p>
-                        </div>
-
-                        <div>
-                            <h4 class="font-bold text-gray-900 mb-2">Bukti Kepemilikan</h4>
                             
-                            <div class="aspect-video bg-gray-100 rounded-lg overflow-hidden mb-3 relative border border-gray-200">
-                                <template x-if="selectedClaim?.claim_proof">
-                                    <img :src="'/storage/' + selectedClaim.claim_proof" class="w-full h-full object-cover">
-                                </template>
-                                <template x-if="!selectedClaim?.claim_proof">
-                                    <div class="flex items-center justify-center h-full text-gray-400 text-xs">Tidak ada foto bukti</div>
-                                </template>
+                            <div class="aspect-video bg-gray-100 rounded-xl overflow-hidden border border-gray-200 shadow-sm relative group">
+                                <img :src="selectedImage || 'https://via.placeholder.com/400?text=No+Img'" 
+                                     class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105">
+                                <div class="absolute bottom-0 left-0 w-full bg-gradient-to-t from-black/60 to-transparent p-4">
+                                    <p class="text-white font-bold text-lg" x-text="selectedClaim?.item?.title"></p>
+                                </div>
                             </div>
 
-                            <div class="space-y-3">
-                                <div>
-                                    <p class="text-xs text-gray-400 font-bold uppercase">Deskripsi Ciri-ciri</p>
-                                    <p class="text-sm text-gray-700 bg-gray-50 p-2 rounded border border-gray-100" x-text="selectedClaim?.claim_description || '-'"></p>
+                            <div class="bg-gray-50 p-4 rounded-xl border border-gray-100 space-y-3 text-sm">
+                                <div class="flex justify-between border-b border-gray-200 pb-2">
+                                    <span class="text-gray-500">Kategori</span>
+                                    <span class="font-medium text-gray-800" x-text="selectedClaim?.item?.category"></span>
+                                </div>
+                                <div class="flex justify-between border-b border-gray-200 pb-2">
+                                    <span class="text-gray-500">Lokasi</span>
+                                    <span class="font-medium text-gray-800" x-text="selectedClaim?.item?.location"></span>
                                 </div>
                                 <div>
-                                    <p class="text-xs text-gray-400 font-bold uppercase">Data Pengklaim</p>
-                                    <p class="text-sm text-gray-800 font-semibold" x-text="selectedClaim?.user?.name"></p>
-                                    <p class="text-xs text-gray-500" x-text="selectedClaim?.user?.no_unik"></p>
-                                    <p class="text-xs text-gray-500" x-text="selectedClaim?.user?.phone"></p>
+                                    <span class="text-gray-500 block mb-1">Deskripsi Asli</span>
+                                    <p class="text-gray-800 italic" x-text="selectedClaim?.item?.description"></p>
                                 </div>
                             </div>
                         </div>
+
+                        <div class="space-y-4 relative">
+                            <div class="absolute left-[-1rem] top-0 bottom-0 w-[1px] bg-gray-200 hidden lg:block"></div> <div class="flex items-center gap-2 mb-2">
+                                <span class="px-2 py-1 bg-purple-100 text-purple-700 text-xs font-bold rounded uppercase tracking-wide">Bukti Pengklaim</span>
+                            </div>
+
+                            <div class="aspect-video bg-gray-100 rounded-xl overflow-hidden border border-gray-200 shadow-sm relative group">
+                                <template x-if="selectedProof">
+                                    <a :href="selectedProof" target="_blank" class="block w-full h-full cursor-zoom-in">
+                                        <img :src="selectedProof" class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105">
+                                        <div class="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <span class="text-white text-xs font-bold bg-black/50 px-3 py-1 rounded-full">Klik untuk Perbesar</span>
+                                        </div>
+                                    </a>
+                                </template>
+                                <template x-if="!selectedProof">
+                                    <div class="flex flex-col items-center justify-center h-full text-gray-400">
+                                        <svg class="w-12 h-12 mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                                        <span class="text-xs">Tidak ada foto bukti dilampirkan</span>
+                                    </div>
+                                </template>
+                            </div>
+
+                            <div class="bg-purple-50 p-4 rounded-xl border border-purple-100 space-y-4">
+                                <div>
+                                    <h5 class="text-xs font-bold text-purple-800 uppercase mb-1">Deskripsi Ciri-ciri oleh Pengklaim</h5>
+                                    <div class="bg-white p-3 rounded-lg border border-purple-100 text-sm text-gray-700 h-24 overflow-y-auto scrollbar-hide">
+                                        <p x-text="selectedClaim?.claim_description || 'Tidak ada deskripsi'"></p>
+                                    </div>
+                                </div>
+                                
+                                <div class="flex items-center gap-3 pt-2 border-t border-purple-100">
+                                    <div class="w-10 h-10 rounded-full bg-purple-200 flex items-center justify-center text-purple-700 font-bold">
+                                        <span x-text="selectedClaim?.user?.name.charAt(0)"></span>
+                                    </div>
+                                    <div>
+                                        <p class="text-sm font-bold text-gray-800" x-text="selectedClaim?.user?.name"></p>
+                                        <p class="text-xs text-gray-500" x-text="selectedClaim?.user?.no_unik"></p>
+                                    </div>
+                                    <div class="ml-auto text-right">
+                                        <p class="text-[10px] text-gray-400 uppercase">Kontak</p>
+                                        <p class="text-sm font-bold text-blue-600" x-text="selectedClaim?.claimer_phone || '-'"></p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                     </div>
                 </div>
                 
-                <div class="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-end">
-                    <button @click="detailModalOpen = false" class="px-4 py-2 bg-white border border-gray-300 text-gray-700 font-bold rounded-lg hover:bg-gray-100">Tutup</button>
+                <div class="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-between items-center">
+                    <div class="text-xs text-gray-400">
+                        Diajukan pada: <span class="font-medium text-gray-600" x-text="new Date(selectedClaim?.created_at).toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })"></span>
+                    </div>
+                    <button @click="detailModalOpen = false" class="px-6 py-2.5 bg-white border border-gray-300 text-gray-700 font-bold rounded-lg hover:bg-gray-100 shadow-sm transition-colors">
+                        Tutup
+                    </button>
                 </div>
             </div>
         </div>

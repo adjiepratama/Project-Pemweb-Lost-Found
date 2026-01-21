@@ -6,16 +6,18 @@ use App\Http\Controllers\UserDashboardController;
 use App\Http\Controllers\ClaimController;
 use App\Http\Controllers\UserProfileController;
 use App\Http\Controllers\AdminController;
+use App\Http\Controllers\LaporController; // <--- UPDATE: Tambahkan ini
 
-// 1. HALAMAN UTAMA (Supaya localhost:8000 tidak 404)
-// ... imports ...
+/*
+|--------------------------------------------------------------------------
+| Web Routes
+|--------------------------------------------------------------------------
+*/
 
 // 1. HALAMAN DEPAN (ROOT)
-// Kembalikan ke logika awal: Selalu arahkan ke Login
 Route::get('/', function () {
     return redirect()->route('login');
 });
-// ... sisa route lainnya tetap sama ...
 
 // 2. ROUTE TAMU (Login/Register)
 Route::middleware('guest')->group(function () {
@@ -25,7 +27,7 @@ Route::middleware('guest')->group(function () {
     Route::post('/register', [AuthController::class, 'register'])->name('register.post');
 });
 
-// 3. ROUTE ADMIN (Grouped & Named)
+// 3. ROUTE ADMIN (Akses khusus role:admin)
 Route::middleware(['auth', 'role:admin'])->prefix('admin')->name('admin.')->group(function () {
     
     // Menu Utama
@@ -34,7 +36,7 @@ Route::middleware(['auth', 'role:admin'])->prefix('admin')->name('admin.')->grou
     Route::get('/laporan-temuan', [AdminController::class, 'laporanTemuan'])->name('laporan.temuan');
     Route::get('/verifikasi-klaim', [AdminController::class, 'verifikasiKlaim'])->name('verifikasi.klaim');
 
-    // CRUD Barang
+    // CRUD Barang (Create, Update, Delete)
     Route::post('/barang/store', [AdminController::class, 'storeBarang'])->name('barang.store');
     Route::put('/barang/{id}', [AdminController::class, 'updateBarang'])->name('barang.update');
     Route::delete('/barang/{id}', [AdminController::class, 'destroyBarang'])->name('barang.destroy');
@@ -49,23 +51,26 @@ Route::middleware(['auth', 'role:admin'])->prefix('admin')->name('admin.')->grou
     Route::put('/password', [AdminController::class, 'updatePassword'])->name('password.update');
 });
 
-// 4. ROUTE USER (Mahasiswa)
+// 4. ROUTE USER (Akses khusus role:user)
 Route::middleware(['auth', 'role:user'])->group(function () {
     
     // Dashboard & Search
     Route::get('/user/dashboard', [UserDashboardController::class, 'index'])->name('user.dashboard');
     Route::post('/user/dashboard/image-search', [UserDashboardController::class, 'searchImage'])->name('user.image.search');
+    // Redirect get request image search back to dashboard
     Route::get('/user/dashboard/image-search', function() { return redirect()->route('user.dashboard'); });
 
     // Klaim Barang
     Route::post('/claim/store', [ClaimController::class, 'store'])->name('claim.store');
     Route::delete('/user/claim/{id}', [UserDashboardController::class, 'destroyClaim'])->name('user.claim.destroy');
 
-    // Lapor Barang
-    Route::get('/user/lapor-barang', [UserDashboardController::class, 'showLapor'])->name('user.lapor');
-    Route::post('/user/lapor-barang', [UserDashboardController::class, 'storeLapor'])->name('user.lapor.store');
-    Route::put('/user/lapor/{id}', [UserDashboardController::class, 'update'])->name('user.lapor.update');
-    Route::delete('/user/lapor/{id}', [UserDashboardController::class, 'destroy'])->name('user.lapor.destroy');
+    // --- UPDATE: SEKARANG MENGGUNAKAN LAPOR CONTROLLER ---
+    // URL tetap '/user/lapor-barang' agar link di sidebar tidak rusak
+    Route::get('/user/lapor-barang', [LaporController::class, 'create'])->name('user.lapor');
+    Route::post('/user/lapor-barang', [LaporController::class, 'store'])->name('user.lapor.store');
+    Route::put('/user/lapor/{id}', [LaporController::class, 'update'])->name('user.lapor.update');
+    Route::delete('/user/lapor/{id}', [LaporController::class, 'destroy'])->name('user.lapor.destroy');
+    // -----------------------------------------------------
 
     // Riwayat & Profile
     Route::get('/user/riwayat', [UserDashboardController::class, 'history'])->name('user.history');
@@ -73,14 +78,63 @@ Route::middleware(['auth', 'role:user'])->group(function () {
     Route::put('/user/profile', [UserProfileController::class, 'updateProfile'])->name('user.profile.update'); 
     Route::put('/user/password', [UserProfileController::class, 'updatePassword'])->name('user.password.update');
 
-    // Notifikasi
-    Route::get('/mark-as-read', function () {
-        if(auth()->check()) {
-            auth()->user()->unreadNotifications->markAsRead();
-        }
-        return redirect()->back();
-    })->name('markAsRead');
+    // Notifikasi (Tandai Dibaca)
+    Route::get('/mark-as-read', [UserDashboardController::class, 'markAsRead'])->name('markAsRead');
 });
 
 // 5. LOGOUT
 Route::get('/logout', [AuthController::class, 'logout'])->middleware('auth')->name('logout');
+
+
+// ==========================================
+// RUTE SEMENTARA: UPDATE HASH BARANG LAMA
+// (Jalankan sekali di browser: /fix-hashes, lalu hapus jika sudah selesai)
+// ==========================================
+Route::get('/fix-hashes', function () {
+    $items = \App\Models\Item::whereNull('image_hash')->get();
+    
+    // Logika Hashing Manual (dicopy agar tidak error akses private method)
+    $count = 0;
+    foreach ($items as $item) {
+        $path = null;
+        if (file_exists(storage_path('app/public/' . $item->image))) {
+            $path = storage_path('app/public/' . $item->image);
+        } elseif (file_exists(public_path($item->image))) {
+            $path = public_path($item->image);
+        }
+
+        if ($path) {
+            $type = exif_imagetype($path);
+            $img = null;
+            switch ($type) {
+                case IMAGETYPE_JPEG: $img = imagecreatefromjpeg($path); break;
+                case IMAGETYPE_PNG:  $img = imagecreatefrompng($path); break;
+                case IMAGETYPE_WEBP: $img = imagecreatefromwebp($path); break;
+            }
+
+            if ($img) {
+                $resized = imagecreatetruecolor(8, 8);
+                imagecopyresampled($resized, $img, 0, 0, 0, 0, 8, 8, imagesx($img), imagesy($img));
+                imagefilter($resized, IMG_FILTER_GRAYSCALE);
+                $totalColor = 0; $pixels = [];
+                for ($y = 0; $y < 8; $y++) {
+                    for ($x = 0; $x < 8; $x++) {
+                        $rgb = imagecolorat($resized, $x, $y);
+                        $gray = $rgb & 0xFF; $pixels[] = $gray; $totalColor += $gray;
+                    }
+                }
+                $average = $totalColor / 64;
+                $hash = '';
+                foreach ($pixels as $pixel) { $hash .= ($pixel >= $average) ? '1' : '0'; }
+                
+                imagedestroy($img);
+                imagedestroy($resized);
+
+                $item->update(['image_hash' => $hash]);
+                $count++;
+            }
+        }
+    }
+    
+    return "Selesai! Berhasil meng-update hash untuk $count barang lama.";
+});

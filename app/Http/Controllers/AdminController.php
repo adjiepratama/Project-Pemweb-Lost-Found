@@ -10,6 +10,8 @@ use Carbon\Carbon;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules\Password;
+use Illuminate\Support\Str; 
+use App\Notifications\StatusNotification; 
 
 class AdminController extends Controller
 {
@@ -17,36 +19,27 @@ class AdminController extends Controller
     {
         // --- 1. LOGIKA STATISTIK REAL-TIME ---
         $stats = [
-            // Kartu 1: Total Barang
             'total_items' => Item::count(),
-            // Hitung barang yang dibuat bulan ini
             'items_this_month' => Item::whereMonth('created_at', Carbon::now()->month)
-                                    ->whereYear('created_at', Carbon::now()->year)
+                                        ->whereYear('created_at', Carbon::now()->year)
+                                        ->count(),
+
+            'laporan_masuk' => Item::where('status', 'pending')->count(),
+            'laporan_today' => Item::where('status', 'pending')
+                                    ->whereDate('created_at', Carbon::today())
                                     ->count(),
 
-            // Kartu 2: Laporan Masuk (Pending)
-            'laporan_masuk' => Item::where('status', 'pending')->count(),
-            // Hitung laporan yang masuk HARI INI
-            'laporan_today' => Item::where('status', 'pending')
-                                ->whereDate('created_at', Carbon::today())
-                                ->count(),
-
-            // Kartu 3: Klaim Pending
             'menunggu_verifikasi' => Claim::where('status', 'pending')->count(),
-            // Hitung klaim yang masuk HARI INI
             'claims_today' => Claim::where('status', 'pending')
-                                ->whereDate('created_at', Carbon::today())
-                                ->count(),
+                                    ->whereDate('created_at', Carbon::today())
+                                    ->count(),
 
-            // Kartu 4: Barang Dikembalikan (Selesai)
             'barang_dikembalikan' => Item::where('status', 'returned')->count(),
-            // Hitung barang yang dikembalikan BULAN INI
             'returned_this_month' => Item::where('status', 'returned')
-                                        ->whereMonth('updated_at', Carbon::now()->month) // Cek tanggal update terakhir
+                                        ->whereMonth('updated_at', Carbon::now()->month)
                                         ->count(),
         ];
 
-        // ... sisa kode query recentReports, recentClaims, newItems tetap sama ...
         $recentReports = Item::where('status', 'pending')->with('user')->latest()->take(3)->get();
         $recentClaims = Claim::where('status', 'pending')->with(['item', 'user'])->latest()->take(3)->get();
         $newItems = Item::latest()->take(4)->get();
@@ -54,82 +47,110 @@ class AdminController extends Controller
         return view('admin.dashboard', compact('stats', 'recentReports', 'recentClaims', 'newItems'));
     }
 
-    // --- LOGIKA UPDATE STATUS (Tetap Sama) ---
-    // Update Status Barang (Untuk Tombol Review/Validasi)
+    // --- UPDATE STATUS BARANG (Review Laporan) + NOTIFIKASI ---
     public function updateItemStatus(Request $request, $id)
     {
         $item = Item::findOrFail($id);
         
-        // Hanya update statusnya saja
         $item->status = $request->status;
         $item->save();
 
-        // Pesan sukses sesuai aksi
-        $message = $request->status == 'available' ? 'Laporan berhasil disetujui!' : 'Laporan berhasil ditolak.';
+        // --- KIRIM NOTIFIKASI KE USER PELAPOR ---
+        if ($item->user) {
+            if ($request->status == 'available') {
+                $item->user->notify(new StatusNotification(
+                    'Laporan Disetujui',
+                    "Laporan Anda '{$item->title}' telah disetujui dan kini tayang di publik.",
+                    'success',
+                    route('user.history')
+                ));
+            } elseif ($request->status == 'rejected') {
+                $item->user->notify(new StatusNotification(
+                    'Laporan Ditolak',
+                    "Maaf, laporan '{$item->title}' ditolak. Silakan periksa kembali data Anda.",
+                    'danger',
+                    route('user.history')
+                ));
+            }
+        }
 
+        $message = $request->status == 'available' ? 'Laporan berhasil disetujui!' : 'Laporan berhasil ditolak.';
         return redirect()->back()->with('success', $message);
     }
     
-    // Fungsi Update Status (Jika belum ada/perlu disesuaikan)
+    // --- UPDATE STATUS KLAIM (Verifikasi) + NOTIFIKASI ---
     public function updateClaimStatus(Request $request, $id)
     {
         $claim = Claim::findOrFail($id);
         
-        // Update Status
         $claim->status = $request->status;
         
-        // Simpan Catatan / Alasan Penolakan (Pastikan kolom ini ada di tabel claims)
-        // $table->text('admin_note')->nullable(); -> Tambahkan di migration jika belum ada
         if ($request->has('note')) {
             $claim->admin_note = $request->note;
         }
-        
         $claim->save();
 
-        // Jika diverifikasi, ubah status barang jadi 'claimed' atau 'returned'
         if ($request->status == 'verified') {
-            $claim->item->update(['status' => 'returned']); // Barang sudah dikembalikan
+            $claim->item->update(['status' => 'returned']); 
         } elseif ($request->status == 'rejected') {
-            $claim->item->update(['status' => 'available']); // Barang tersedia lagi
+            $claim->item->update(['status' => 'available']); 
+        }
+
+        // --- KIRIM NOTIFIKASI KE USER PENGKLAIM ---
+        if ($claim->user) {
+            if ($request->status == 'verified') {
+                $claim->user->notify(new StatusNotification(
+                    'Klaim Diterima! 🎉',
+                    "Selamat! Klaim untuk '{$claim->item->title}' telah disetujui. Silakan ambil barang Anda.",
+                    'success',
+                    route('user.history')
+                ));
+            } elseif ($request->status == 'rejected') {
+                $claim->user->notify(new StatusNotification(
+                    'Klaim Ditolak',
+                    "Maaf, klaim '{$claim->item->title}' ditolak. Alasan: " . ($request->note ?? 'Data tidak sesuai.'),
+                    'danger',
+                    route('user.history')
+                ));
+            }
         }
 
         return redirect()->back()->with('success', 'Status klaim berhasil diperbarui!');
     }
 
+    // --- Kelola Barang (Search, Filter, & Auto-Donasi) ---
     public function kelolaBarang(Request $request)
     {
-        // 1. Query Dasar
+        // --- 1. FITUR OTOMATIS: AUTO DONASI > 180 HARI ---
+        Item::whereIn('status', ['available', 'pending'])
+            ->where('created_at', '<=', Carbon::now()->subDays(180))
+            ->update(['status' => 'donated']);
+        // --------------------------------------------------
+
         $query = Item::query();
 
-        // 2. Filter Pencarian
         if ($request->filled('search')) {
             $query->where('title', 'like', '%' . $request->search . '%')
                   ->orWhere('description', 'like', '%' . $request->search . '%');
         }
 
-        // 3. Filter Kategori
         if ($request->filled('category') && $request->category != 'Semua') {
             $query->where('category', $request->category);
         }
 
-        // 4. Filter Status
         if ($request->filled('status') && $request->status != 'Semua') {
             $query->where('status', $request->status);
         }
 
-        // Ambil Data (Pagination 10 per halaman)
         $items = $query->latest()->paginate(10);
 
-        // 5. Hitung Barang Siap Donasi (> 90 hari & belum diklaim/kembali)
-        // Sesuai referensi gambar
-        $donationReadyCount = Item::where('created_at', '<=', Carbon::now()->subDays(90))
-            ->whereIn('status', ['available', 'pending'])
-            ->count();
+        // Hitung total barang yang sudah didonasikan
+        $donationReadyCount = Item::where('status', 'donated')->count();
 
         return view('admin.kelola_barang', compact('items', 'donationReadyCount'));
     }
 
-    // SIMPAN BARANG BARU
+    // --- Store Barang Baru (UPDATED WITH HASHING) ---
     public function storeBarang(Request $request)
     {
         $request->validate([
@@ -141,8 +162,14 @@ class AdminController extends Controller
         ]);
 
         $path = null;
+        $imageHash = null;
+
         if ($request->hasFile('image')) {
             $path = $request->file('image')->store('items', 'public');
+            
+            // --- HITUNG HASH ---
+            $fullPath = storage_path('app/public/' . $path);
+            $imageHash = $this->generateImageHash($fullPath);
         }
 
         Item::create([
@@ -150,16 +177,17 @@ class AdminController extends Controller
             'description' => $request->description,
             'category' => $request->category,
             'location' => $request->location,
-            'date_event' => $request->date_found, // Pastikan ada kolom ini di DB atau gunakan created_at
+            'date_event' => $request->date_found,
             'image' => $path,
-            'status' => 'available', // Default tersedia
-            'user_id' => auth()->id() // Admin yang input
+            'image_hash' => $imageHash, // Simpan Hash
+            'status' => 'available', 
+            'user_id' => auth()->id() 
         ]);
 
         return redirect()->back()->with('success', 'Barang berhasil ditambahkan!');
     }
 
-    // UPDATE BARANG
+    // --- Update Barang (UPDATED WITH HASHING) ---
     public function updateBarang(Request $request, $id)
     {
         $item = Item::findOrFail($id);
@@ -167,9 +195,14 @@ class AdminController extends Controller
         $data = $request->except(['image', '_token', '_method']);
         
         if ($request->hasFile('image')) {
-            // Hapus gambar lama jika ada
             if ($item->image) Storage::disk('public')->delete($item->image);
-            $data['image'] = $request->file('image')->store('items', 'public');
+            
+            $path = $request->file('image')->store('items', 'public');
+            $data['image'] = $path;
+
+            // --- HITUNG HASH BARU ---
+            $fullPath = storage_path('app/public/' . $path);
+            $data['image_hash'] = $this->generateImageHash($fullPath);
         }
 
         $item->update($data);
@@ -177,22 +210,21 @@ class AdminController extends Controller
         return redirect()->back()->with('success', 'Data barang berhasil diperbarui!');
     }
 
-    // HAPUS BARANG
+    // --- Hapus Barang ---
     public function destroyBarang($id)
     {
         $item = Item::findOrFail($id);
-        if ($item->image_path) Storage::disk('public')->delete($item->image_path);
+        if ($item->image) Storage::disk('public')->delete($item->image);
         $item->delete();
         
         return redirect()->back()->with('success', 'Barang berhasil dihapus!');
     }
 
+    // --- Laporan Temuan (Search & Filter) ---
     public function laporanTemuan(Request $request)
     {
-        // 1. Query Dasar (Ambil data item beserta user pelapornya)
         $query = Item::with('user');
 
-        // 2. Filter Pencarian (Judul Barang atau Nama Pelapor)
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function($q) use ($search) {
@@ -204,10 +236,6 @@ class AdminController extends Controller
             });
         }
 
-        // 3. Filter Status (Mapping dari Tombol UI ke Database)
-        // pending -> pending
-        // disetujui -> available
-        // ditolak -> rejected
         if ($request->has('status') && $request->status != 'semua') {
             $statusMap = [
                 'pending'   => 'pending',
@@ -219,10 +247,8 @@ class AdminController extends Controller
             }
         }
 
-        // Ambil Data
         $laporan = $query->latest()->paginate(10);
 
-        // 4. Hitung Statistik untuk Kartu Atas
         $stats = [
             'total'    => Item::count(),
             'pending'  => Item::where('status', 'pending')->count(),
@@ -233,22 +259,18 @@ class AdminController extends Controller
         return view('admin.laporan_temuan', compact('laporan', 'stats'));
     }
 
+    // --- Verifikasi Klaim (Search & Filter) ---
     public function verifikasiKlaim(Request $request)
     {
-        // 1. Query Dasar (Ambil data klaim beserta barang & user pengklaim)
         $query = Claim::with(['item', 'user']);
 
-        // 2. Filter Pencarian (Nama Barang, Nama Pengklaim, NIM, atau ID Klaim)
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function($q) use ($search) {
-                // Cari berdasarkan ID Klaim (misal CLM-001)
                 $q->where('id', 'like', "%{$search}%")
-                  // Cari berdasarkan Nama Barang
                   ->orWhereHas('item', function($i) use ($search) {
                       $i->where('title', 'like', "%{$search}%");
                   })
-                  // Cari berdasarkan User
                   ->orWhereHas('user', function($u) use ($search) {
                       $u->where('name', 'like', "%{$search}%")
                         ->orWhere('no_unik', 'like', "%{$search}%");
@@ -256,12 +278,9 @@ class AdminController extends Controller
             });
         }
 
-        // 3. Filter Status
         if ($request->has('status') && $request->status != 'semua') {
-            // Mapping status UI ke Database
             $statusMap = [
                 'menunggu' => 'pending',
-                'verifikasi' => 'verification', // Jika ada status intermediate
                 'disetujui' => 'verified',
                 'ditolak' => 'rejected'
             ];
@@ -270,13 +289,11 @@ class AdminController extends Controller
             }
         }
 
-        // Ambil Data
         $claims = $query->latest()->paginate(10);
 
-        // 4. Hitung Statistik untuk Kartu Atas
         $stats = [
             'pending' => Claim::where('status', 'pending')->count(),
-            'verification' => Claim::where('status', 'verification')->count(), // Opsional
+            'verification' => Claim::where('status', 'verification')->count(),
             'approved_month' => Claim::where('status', 'verified')
                                      ->whereMonth('updated_at', now()->month)
                                      ->count(),
@@ -285,6 +302,7 @@ class AdminController extends Controller
         return view('admin.verifikasi_klaim', compact('claims', 'stats'));
     }
 
+    // --- Profil Admin ---
     public function profile()
     {
         return view('admin.profile');
@@ -292,26 +310,14 @@ class AdminController extends Controller
 
     public function updateProfile(Request $request)
     {
-        // 1. Validasi input dengan nama 'profile_photo'
         $request->validate([
             'profile_photo' => 'nullable|image|mimes:jpeg,png,jpg|max:2048',
-            // validasi lain...
         ]);
 
         $user = auth()->user();
 
-        // 2. Cek apakah ada file yang diupload dengan nama 'profile_photo'
         if ($request->hasFile('profile_photo')) {
-            
-            // Hapus foto lama jika ada (Optional, agar storage tidak penuh)
-            // if ($user->profile_photo) { 
-            //     Storage::disk('public')->delete($user->profile_photo); 
-            // }
-            
-            // Simpan file
             $path = $request->file('profile_photo')->store('profiles', 'public');
-            
-            // 3. Simpan path ke kolom database 'profile_photo'
             $user->profile_photo = $path;
         }
 
@@ -332,5 +338,54 @@ class AdminController extends Controller
         ]);
 
         return back()->with('success', 'Kata sandi berhasil diperbarui.');
+    }
+
+    // ==========================================
+    // FUNGSI BANTUAN: GENERATE IMAGE HASH (PHash)
+    // ==========================================
+    private function generateImageHash($imagePath)
+    {
+        if (!file_exists($imagePath)) return null;
+
+        $type = exif_imagetype($imagePath);
+        switch ($type) {
+            case IMAGETYPE_JPEG: $img = imagecreatefromjpeg($imagePath); break;
+            case IMAGETYPE_PNG:  $img = imagecreatefrompng($imagePath); break;
+            case IMAGETYPE_WEBP: $img = imagecreatefromwebp($imagePath); break;
+            default: return null; 
+        }
+
+        if (!$img) return null;
+
+        // 1. Resize ke 8x8 pixel (Total 64 pixel)
+        $resized = imagecreatetruecolor(8, 8);
+        imagecopyresampled($resized, $img, 0, 0, 0, 0, 8, 8, imagesx($img), imagesy($img));
+
+        // 2. Ubah ke Grayscale (Hitam Putih)
+        imagefilter($resized, IMG_FILTER_GRAYSCALE);
+
+        // 3. Hitung Rata-rata Warna
+        $totalColor = 0;
+        $pixels = [];
+        for ($y = 0; $y < 8; $y++) {
+            for ($x = 0; $x < 8; $x++) {
+                $rgb = imagecolorat($resized, $x, $y);
+                $gray = $rgb & 0xFF; 
+                $pixels[] = $gray;
+                $totalColor += $gray;
+            }
+        }
+        $average = $totalColor / 64;
+
+        // 4. Buat Hash String
+        $hash = '';
+        foreach ($pixels as $pixel) {
+            $hash .= ($pixel >= $average) ? '1' : '0';
+        }
+
+        imagedestroy($img);
+        imagedestroy($resized);
+
+        return $hash;
     }
 }
