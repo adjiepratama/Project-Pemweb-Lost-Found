@@ -11,31 +11,24 @@ return new class extends Migration
      */
     public function up(): void
     {
-        // 1. Ini Tabel USERS 
         Schema::create('users', function (Blueprint $table) {
             $table->id();
-            $table->string('name'); // Nama Lengkap
-            $table->string('no_unik')->unique(); // Nomer Unik (NIM/NIK)
-            $table->string('username')->unique(); // Username
-            $table->string('email')->unique(); // Email
-            $table->string('password'); // Password
-            $table->string('role')->default('user'); // Default role: user
-            
-            // --- TAMBAHAN BARU: Kolom Foto Profil ---
+            $table->string('name'); 
+            $table->string('no_unik')->unique(); 
+            $table->string('username')->unique(); 
+            $table->string('email')->unique(); 
+            $table->string('password'); 
+            $table->string('role')->default('user'); 
             $table->string('profile_photo')->nullable(); 
-            // ----------------------------------------
-
             $table->timestamps();
         });
 
-        // 2. Ini Tabel PASSWORD RESET TOKENS (Bawaan Laravel)
         Schema::create('password_reset_tokens', function (Blueprint $table) {
             $table->string('email')->primary();
             $table->string('token');
             $table->timestamp('created_at')->nullable();
         });
 
-        // 3. Ini Tabel SESSIONS 
         Schema::create('sessions', function (Blueprint $table) {
             $table->string('id')->primary();
             $table->foreignId('user_id')->nullable()->index();

@@ -9,7 +9,6 @@ class Item extends Model
 {
     use HasFactory;
 
-    // Kolom mana saja yang boleh diisi oleh User
     protected $fillable = [
         'user_id',
         'title',
@@ -21,7 +20,6 @@ class Item extends Model
         'image'
     ];
 
-    // Relasi: Setiap Barang milik satu User
     public function user()
     {
         return $this->belongsTo(User::class);

@@ -22,13 +22,11 @@ class Claim extends Model
         'status',
     ];
 
-    // Relasi: Klaim ini untuk barang apa?
     public function item()
     {
         return $this->belongsTo(Item::class);
     }
-
-    // Relasi: Siapa yang mengajukan klaim?
+    
     public function user()
     {
         return $this->belongsTo(User::class);

@@ -17,7 +17,6 @@ class AdminController extends Controller
 {
     public function index()
     {
-        // --- 1. LOGIKA STATISTIK REAL-TIME ---
         $stats = [
             'total_items' => Item::count(),
             'items_this_month' => Item::whereMonth('created_at', Carbon::now()->month)
@@ -47,7 +46,6 @@ class AdminController extends Controller
         return view('admin.dashboard', compact('stats', 'recentReports', 'recentClaims', 'newItems'));
     }
 
-    // --- UPDATE STATUS BARANG (Review Laporan) + NOTIFIKASI ---
     public function updateItemStatus(Request $request, $id)
     {
         $item = Item::findOrFail($id);
@@ -55,7 +53,6 @@ class AdminController extends Controller
         $item->status = $request->status;
         $item->save();
 
-        // --- KIRIM NOTIFIKASI KE USER PELAPOR ---
         if ($item->user) {
             if ($request->status == 'available') {
                 $item->user->notify(new StatusNotification(
@@ -78,7 +75,6 @@ class AdminController extends Controller
         return redirect()->back()->with('success', $message);
     }
     
-    // --- UPDATE STATUS KLAIM (Verifikasi) + NOTIFIKASI ---
     public function updateClaimStatus(Request $request, $id)
     {
         $claim = Claim::findOrFail($id);
@@ -96,7 +92,6 @@ class AdminController extends Controller
             $claim->item->update(['status' => 'available']); 
         }
 
-        // --- KIRIM NOTIFIKASI KE USER PENGKLAIM ---
         if ($claim->user) {
             if ($request->status == 'verified') {
                 $claim->user->notify(new StatusNotification(
@@ -118,14 +113,11 @@ class AdminController extends Controller
         return redirect()->back()->with('success', 'Status klaim berhasil diperbarui!');
     }
 
-    // --- Kelola Barang (Search, Filter, & Auto-Donasi) ---
     public function kelolaBarang(Request $request)
     {
-        // --- 1. FITUR OTOMATIS: AUTO DONASI > 180 HARI ---
         Item::whereIn('status', ['available', 'pending'])
             ->where('created_at', '<=', Carbon::now()->subDays(180))
             ->update(['status' => 'donated']);
-        // --------------------------------------------------
 
         $query = Item::query();
 
@@ -144,13 +136,11 @@ class AdminController extends Controller
 
         $items = $query->latest()->paginate(10);
 
-        // Hitung total barang yang sudah didonasikan
         $donationReadyCount = Item::where('status', 'donated')->count();
 
         return view('admin.kelola_barang', compact('items', 'donationReadyCount'));
     }
 
-    // --- Store Barang Baru (UPDATED WITH HASHING) ---
     public function storeBarang(Request $request)
     {
         $request->validate([
@@ -167,7 +157,6 @@ class AdminController extends Controller
         if ($request->hasFile('image')) {
             $path = $request->file('image')->store('items', 'public');
             
-            // --- HITUNG HASH ---
             $fullPath = storage_path('app/public/' . $path);
             $imageHash = $this->generateImageHash($fullPath);
         }
@@ -179,7 +168,7 @@ class AdminController extends Controller
             'location' => $request->location,
             'date_event' => $request->date_found,
             'image' => $path,
-            'image_hash' => $imageHash, // Simpan Hash
+            'image_hash' => $imageHash, 
             'status' => 'available', 
             'user_id' => auth()->id() 
         ]);
@@ -187,7 +176,6 @@ class AdminController extends Controller
         return redirect()->back()->with('success', 'Barang berhasil ditambahkan!');
     }
 
-    // --- Update Barang (UPDATED WITH HASHING) ---
     public function updateBarang(Request $request, $id)
     {
         $item = Item::findOrFail($id);
@@ -200,7 +188,6 @@ class AdminController extends Controller
             $path = $request->file('image')->store('items', 'public');
             $data['image'] = $path;
 
-            // --- HITUNG HASH BARU ---
             $fullPath = storage_path('app/public/' . $path);
             $data['image_hash'] = $this->generateImageHash($fullPath);
         }
@@ -210,7 +197,6 @@ class AdminController extends Controller
         return redirect()->back()->with('success', 'Data barang berhasil diperbarui!');
     }
 
-    // --- Hapus Barang ---
     public function destroyBarang($id)
     {
         $item = Item::findOrFail($id);
@@ -220,7 +206,6 @@ class AdminController extends Controller
         return redirect()->back()->with('success', 'Barang berhasil dihapus!');
     }
 
-    // --- Laporan Temuan (Search & Filter) ---
     public function laporanTemuan(Request $request)
     {
         $query = Item::with('user');
@@ -259,7 +244,6 @@ class AdminController extends Controller
         return view('admin.laporan_temuan', compact('laporan', 'stats'));
     }
 
-    // --- Verifikasi Klaim (Search & Filter) ---
     public function verifikasiKlaim(Request $request)
     {
         $query = Claim::with(['item', 'user']);
@@ -302,7 +286,6 @@ class AdminController extends Controller
         return view('admin.verifikasi_klaim', compact('claims', 'stats'));
     }
 
-    // --- Profil Admin ---
     public function profile()
     {
         return view('admin.profile');
@@ -340,9 +323,6 @@ class AdminController extends Controller
         return back()->with('success', 'Kata sandi berhasil diperbarui.');
     }
 
-    // ==========================================
-    // FUNGSI BANTUAN: GENERATE IMAGE HASH (PHash)
-    // ==========================================
     private function generateImageHash($imagePath)
     {
         if (!file_exists($imagePath)) return null;
@@ -357,14 +337,11 @@ class AdminController extends Controller
 
         if (!$img) return null;
 
-        // 1. Resize ke 8x8 pixel (Total 64 pixel)
         $resized = imagecreatetruecolor(8, 8);
         imagecopyresampled($resized, $img, 0, 0, 0, 0, 8, 8, imagesx($img), imagesy($img));
 
-        // 2. Ubah ke Grayscale (Hitam Putih)
         imagefilter($resized, IMG_FILTER_GRAYSCALE);
 
-        // 3. Hitung Rata-rata Warna
         $totalColor = 0;
         $pixels = [];
         for ($y = 0; $y < 8; $y++) {
@@ -377,7 +354,6 @@ class AdminController extends Controller
         }
         $average = $totalColor / 64;
 
-        // 4. Buat Hash String
         $hash = '';
         foreach ($pixels as $pixel) {
             $hash .= ($pixel >= $average) ? '1' : '0';

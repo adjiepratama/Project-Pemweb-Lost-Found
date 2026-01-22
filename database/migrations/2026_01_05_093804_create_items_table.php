@@ -25,12 +25,7 @@ return new class extends Migration
         ])->default('pending'); 
 
         $table->string('image')->nullable();
-        
-        // --- TAMBAHKAN BARIS INI ---
-        // Kolom ini akan menyimpan kode biner gambar (contoh: 101011001...)
         $table->string('image_hash')->nullable(); 
-        // ---------------------------
-
         $table->timestamps();
     });
     }
